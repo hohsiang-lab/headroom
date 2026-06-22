@@ -11,3 +11,4 @@
 pub mod chat_completions;
 pub mod conversations;
 pub mod responses;
+pub mod retrieve;
