@@ -68,7 +68,7 @@ RUN cd /tmp && python -c "from headroom._core import DiffCompressor, SmartCrushe
 # path so the COPY in the runtime stages can pick it up.
 RUN --mount=type=cache,target=/usr/local/cargo/registry \
     --mount=type=cache,target=/build/target \
-    cargo build --release --locked --bin headroom-proxy && \
+    cargo build --release --locked --features redis --bin headroom-proxy && \
     cp target/release/headroom-proxy /usr/local/bin/headroom-proxy
 
 # ---- Runtime stage (python-slim): supports root/nonroot via build arg ----

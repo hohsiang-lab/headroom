@@ -40,6 +40,106 @@ pub enum CcrBackend {
     Redis,
 }
 
+impl CcrBackend {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            CcrBackend::InMemory => "in_memory",
+            CcrBackend::Sqlite => "sqlite",
+            CcrBackend::Redis => "redis",
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{CliArgs, Config};
+    use clap::Parser;
+    use headroom_core::ccr::backends::CcrBackendConfig;
+    use std::sync::{Mutex, OnceLock};
+
+    fn env_lock() -> std::sync::MutexGuard<'static, ()> {
+        static ENV_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
+        ENV_LOCK.get_or_init(|| Mutex::new(())).lock().unwrap()
+    }
+
+    fn clear_ccr_env() {
+        for key in [
+            "HEADROOM_CCR_BACKEND",
+            "HEADROOM_REDIS_URL",
+            "HEADROOM_CCR_TENANT_PREFIX",
+            "HEADROOM_PROXY_CCR_BACKEND",
+            "HEADROOM_PROXY_CCR_REDIS_URL",
+            "HEADROOM_PROXY_CCR_REDIS_KEY_PREFIX",
+        ] {
+            std::env::remove_var(key);
+        }
+    }
+
+    fn parse_with_env() -> Config {
+        let args = CliArgs::parse_from(["headroom-proxy", "--upstream", "http://127.0.0.1:8788"]);
+        Config::from_cli(args)
+    }
+
+    #[test]
+    fn ccr_env_selects_redis_url_and_tenant_prefix() {
+        let _guard = env_lock();
+        clear_ccr_env();
+        std::env::set_var("HEADROOM_CCR_BACKEND", "redis");
+        std::env::set_var("HEADROOM_REDIS_URL", "redis://redis:6379/4");
+        std::env::set_var("HEADROOM_CCR_TENANT_PREFIX", "headroom-prod");
+
+        let config = parse_with_env();
+
+        match config.ccr_backend {
+            CcrBackendConfig::Redis {
+                url,
+                ttl_seconds,
+                key_prefix,
+            } => {
+                assert_eq!(url, "redis://redis:6379/4");
+                assert_eq!(ttl_seconds, headroom_core::ccr::DEFAULT_TTL.as_secs());
+                assert_eq!(key_prefix.as_deref(), Some("headroom-prod"));
+            }
+            other => panic!("expected redis CCR backend, got {other:?}"),
+        }
+        clear_ccr_env();
+    }
+
+    #[test]
+    fn ccr_env_empty_tenant_prefix_is_unset() {
+        let _guard = env_lock();
+        clear_ccr_env();
+        std::env::set_var("HEADROOM_CCR_BACKEND", "redis");
+        std::env::set_var("HEADROOM_REDIS_URL", "redis://redis:6379");
+        std::env::set_var("HEADROOM_CCR_TENANT_PREFIX", "  ");
+
+        let config = parse_with_env();
+
+        match config.ccr_backend {
+            CcrBackendConfig::Redis { key_prefix, .. } => {
+                assert_eq!(key_prefix, None);
+            }
+            other => panic!("expected redis CCR backend, got {other:?}"),
+        }
+        clear_ccr_env();
+    }
+
+    #[test]
+    fn missing_redis_url_stays_fatal_for_startup() {
+        let _guard = env_lock();
+        clear_ccr_env();
+        std::env::set_var("HEADROOM_CCR_BACKEND", "redis");
+
+        let config = parse_with_env();
+
+        match config.ccr_backend {
+            CcrBackendConfig::Redis { url, .. } => assert!(url.is_empty()),
+            other => panic!("expected redis CCR backend, got {other:?}"),
+        }
+        clear_ccr_env();
+    }
+}
+
 /// Policy for stripping internal `x-headroom-*` headers from upstream-bound
 /// requests (PR-A5, fixes P5-49).
 ///
@@ -279,13 +379,17 @@ pub struct CliArgs {
     pub compression_mode: CompressionMode,
 
     /// CCR backend used for retrieval markers emitted by live-zone compression.
+    #[arg(long = "ccr-backend", env = "HEADROOM_CCR_BACKEND", value_enum)]
+    pub ccr_backend: Option<CcrBackend>,
+
+    /// Legacy env compatibility for pre-HO-2132 deployments.
     #[arg(
-        long = "ccr-backend",
+        long = "legacy-ccr-backend",
+        hide = true,
         env = "HEADROOM_PROXY_CCR_BACKEND",
-        value_enum,
-        default_value_t = CcrBackend::Sqlite,
+        value_enum
     )]
-    pub ccr_backend: CcrBackend,
+    pub legacy_ccr_backend: Option<CcrBackend>,
 
     /// SQLite CCR database path. Used when `--ccr-backend=sqlite`.
     #[arg(
@@ -312,15 +416,28 @@ pub struct CliArgs {
     pub ccr_ttl_seconds: u64,
 
     /// Redis URL for future multi-worker CCR store rollout.
-    #[arg(long = "ccr-redis-url", env = "HEADROOM_PROXY_CCR_REDIS_URL")]
+    #[arg(long = "ccr-redis-url", env = "HEADROOM_REDIS_URL")]
     pub ccr_redis_url: Option<String>,
 
-    /// Redis key prefix for future multi-worker CCR store rollout.
+    /// Legacy env compatibility for pre-HO-2132 deployments.
     #[arg(
-        long = "ccr-redis-key-prefix",
+        long = "legacy-ccr-redis-url",
+        hide = true,
+        env = "HEADROOM_PROXY_CCR_REDIS_URL"
+    )]
+    pub legacy_ccr_redis_url: Option<String>,
+
+    /// Redis key prefix for future multi-worker CCR store rollout.
+    #[arg(long = "ccr-redis-key-prefix", env = "HEADROOM_CCR_TENANT_PREFIX")]
+    pub ccr_redis_key_prefix: Option<String>,
+
+    /// Legacy env compatibility for pre-HO-2132 deployments.
+    #[arg(
+        long = "legacy-ccr-redis-key-prefix",
+        hide = true,
         env = "HEADROOM_PROXY_CCR_REDIS_KEY_PREFIX"
     )]
-    pub ccr_redis_key_prefix: Option<String>,
+    pub legacy_ccr_redis_key_prefix: Option<String>,
 
     /// Whether to derive `frozen_message_count` from customer
     /// `cache_control` markers in the request body (PR-A4).
@@ -608,6 +725,15 @@ pub struct Config {
     pub vertex_adc_scope: String,
 }
 
+fn normalize_optional_string(value: String) -> Option<String> {
+    let trimmed = value.trim();
+    if trimmed.is_empty() {
+        None
+    } else {
+        Some(trimmed.to_string())
+    }
+}
+
 impl Config {
     pub fn from_cli(args: CliArgs) -> Self {
         let rewrite_host = if args.no_rewrite_host {
@@ -618,6 +744,15 @@ impl Config {
         let compression_max_body_bytes = args
             .compression_max_body_bytes
             .unwrap_or(args.max_body_bytes);
+        let ccr_backend = args
+            .ccr_backend
+            .or(args.legacy_ccr_backend)
+            .unwrap_or(CcrBackend::Sqlite);
+        let ccr_redis_url = args.ccr_redis_url.or(args.legacy_ccr_redis_url);
+        let ccr_redis_key_prefix = args
+            .ccr_redis_key_prefix
+            .or(args.legacy_ccr_redis_key_prefix)
+            .and_then(normalize_optional_string);
         Self {
             listen: args.listen,
             upstream: args.upstream,
@@ -630,7 +765,7 @@ impl Config {
             compression: args.compression,
             compression_max_body_bytes,
             compression_mode: args.compression_mode,
-            ccr_backend: match args.ccr_backend {
+            ccr_backend: match ccr_backend {
                 CcrBackend::InMemory => CcrBackendConfig::InMemory {
                     capacity: args.ccr_in_memory_capacity,
                     ttl_seconds: args.ccr_ttl_seconds,
@@ -640,11 +775,9 @@ impl Config {
                     ttl_seconds: args.ccr_ttl_seconds,
                 },
                 CcrBackend::Redis => CcrBackendConfig::Redis {
-                    url: args
-                        .ccr_redis_url
-                        .unwrap_or_else(|| "redis://127.0.0.1:6379".to_string()),
+                    url: ccr_redis_url.unwrap_or_default(),
                     ttl_seconds: args.ccr_ttl_seconds,
-                    key_prefix: args.ccr_redis_key_prefix,
+                    key_prefix: ccr_redis_key_prefix,
                 },
             },
             cache_control_auto_frozen: args.cache_control_auto_frozen,
