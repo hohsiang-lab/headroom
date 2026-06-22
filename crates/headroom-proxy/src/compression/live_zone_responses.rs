@@ -567,6 +567,7 @@ mod tests {
             CompressionMode::Off,
             RequestAuthMode::Payg,
             "req-1",
+            None,
         );
         assert!(matches!(
             out,
@@ -584,6 +585,7 @@ mod tests {
             CompressionMode::LiveZone,
             RequestAuthMode::Payg,
             "req-2",
+            None,
         );
         assert!(matches!(
             out,
@@ -601,6 +603,7 @@ mod tests {
             CompressionMode::LiveZone,
             RequestAuthMode::Payg,
             "req-3",
+            None,
         );
         assert!(matches!(
             out,
@@ -624,6 +627,7 @@ mod tests {
             CompressionMode::LiveZone,
             RequestAuthMode::Payg,
             "req-4",
+            None,
         );
         assert!(matches!(out, Outcome::NoCompression));
     }
@@ -649,6 +653,7 @@ mod tests {
             CompressionMode::LiveZone,
             RequestAuthMode::Payg,
             "req-e1-resp",
+            None,
         );
         match out {
             Outcome::Compressed {
@@ -679,6 +684,7 @@ mod tests {
             CompressionMode::LiveZone,
             RequestAuthMode::OAuth,
             "req-e1-oauth",
+            None,
         );
         assert!(matches!(out, Outcome::NoCompression));
     }
