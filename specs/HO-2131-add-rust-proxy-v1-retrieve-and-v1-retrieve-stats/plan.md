@@ -67,8 +67,8 @@ crates/headroom-proxy/tests/
 
 ## Complexity Tracking
 
-| Violation | Why Needed | Simpler Alternative Rejected Because |
-| --- | --- | --- |
+| Violation                           | Why Needed                                                       | Simpler Alternative Rejected Because                                                               |
+| ----------------------------------- | ---------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
 | Add proxy-side retrieve stats layer | `CcrStore::len()` alone cannot prove successful local retrievals | Returning only `entry_count` would repeat the live failure mode where stats stayed empty/ambiguous |
 
 ## Implementation Phases
