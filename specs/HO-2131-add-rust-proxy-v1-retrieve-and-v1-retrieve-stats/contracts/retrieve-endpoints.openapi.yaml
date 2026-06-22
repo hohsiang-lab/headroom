@@ -1,0 +1,115 @@
+openapi: 3.1.0
+info:
+  title: Headroom Rust Proxy CCR Retrieve Endpoints
+  version: 0.1.0
+paths:
+  /v1/retrieve:
+    post:
+      summary: Retrieve original CCR payload from the Rust proxy local store.
+      operationId: retrieveCcrPayload
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - hash
+              properties:
+                hash:
+                  type: string
+                  pattern: "^[a-f0-9]{24}$"
+                query:
+                  type: string
+                  description: Optional search query. Unsupported in initial Rust scope unless existing CCR APIs support it.
+              additionalProperties: false
+      responses:
+        "200":
+          description: Stored payload found.
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - hash
+                  - original_content
+                properties:
+                  hash:
+                    type: string
+                  original_content:
+                    type: string
+                  retrieval_count:
+                    type: integer
+                    minimum: 1
+                    nullable: true
+        "400":
+          description: Invalid request body or hash.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Hash not found or expired.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /v1/retrieve/stats:
+    get:
+      summary: Inspect Rust proxy CCR retrieve/store status.
+      operationId: getCcrRetrieveStats
+      responses:
+        "200":
+          description: Local CCR store and retrieve counters.
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - store
+                  - retrievals
+                properties:
+                  store:
+                    type: object
+                    required:
+                      - entry_count
+                    properties:
+                      entry_count:
+                        type: integer
+                        minimum: 0
+                      backend:
+                        type: string
+                        nullable: true
+                      ttl_seconds:
+                        type: integer
+                        minimum: 0
+                        nullable: true
+                  retrievals:
+                    type: object
+                    required:
+                      - success_count
+                      - miss_count
+                      - invalid_request_count
+                      - stats_read_count
+                    properties:
+                      success_count:
+                        type: integer
+                        minimum: 0
+                      miss_count:
+                        type: integer
+                        minimum: 0
+                      invalid_request_count:
+                        type: integer
+                        minimum: 0
+                      stats_read_count:
+                        type: integer
+                        minimum: 0
+components:
+  schemas:
+    ErrorResponse:
+      type: object
+      required:
+        - error
+      properties:
+        error:
+          type: string
