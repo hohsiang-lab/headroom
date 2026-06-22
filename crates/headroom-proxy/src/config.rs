@@ -1,7 +1,9 @@
 //! Configuration for the proxy: CLI flags + env vars.
 
 use clap::{Parser, ValueEnum};
+use headroom_core::ccr::backends::CcrBackendConfig;
 use std::net::SocketAddr;
+use std::path::PathBuf;
 use std::time::Duration;
 use url::Url;
 
@@ -28,6 +30,14 @@ pub enum CompressionMode {
     /// in PR-A1 this falls through to passthrough behaviour with a
     /// loud warning. Phase B PR-B2 wires in the actual dispatcher.
     LiveZone,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
+#[clap(rename_all = "snake_case")]
+pub enum CcrBackend {
+    InMemory,
+    Sqlite,
+    Redis,
 }
 
 /// Policy for stripping internal `x-headroom-*` headers from upstream-bound
@@ -268,6 +278,50 @@ pub struct CliArgs {
     )]
     pub compression_mode: CompressionMode,
 
+    /// CCR backend used for retrieval markers emitted by live-zone compression.
+    #[arg(
+        long = "ccr-backend",
+        env = "HEADROOM_PROXY_CCR_BACKEND",
+        value_enum,
+        default_value_t = CcrBackend::Sqlite,
+    )]
+    pub ccr_backend: CcrBackend,
+
+    /// SQLite CCR database path. Used when `--ccr-backend=sqlite`.
+    #[arg(
+        long = "ccr-sqlite-path",
+        env = "HEADROOM_PROXY_CCR_SQLITE_PATH",
+        default_value = "headroom-ccr.sqlite"
+    )]
+    pub ccr_sqlite_path: PathBuf,
+
+    /// In-memory CCR capacity. Used by tests and explicit in-memory mode.
+    #[arg(
+        long = "ccr-in-memory-capacity",
+        env = "HEADROOM_PROXY_CCR_IN_MEMORY_CAPACITY",
+        default_value_t = headroom_core::ccr::DEFAULT_CAPACITY,
+    )]
+    pub ccr_in_memory_capacity: usize,
+
+    /// CCR entry TTL in seconds.
+    #[arg(
+        long = "ccr-ttl-seconds",
+        env = "HEADROOM_PROXY_CCR_TTL_SECONDS",
+        default_value_t = headroom_core::ccr::DEFAULT_TTL.as_secs(),
+    )]
+    pub ccr_ttl_seconds: u64,
+
+    /// Redis URL for future multi-worker CCR store rollout.
+    #[arg(long = "ccr-redis-url", env = "HEADROOM_PROXY_CCR_REDIS_URL")]
+    pub ccr_redis_url: Option<String>,
+
+    /// Redis key prefix for future multi-worker CCR store rollout.
+    #[arg(
+        long = "ccr-redis-key-prefix",
+        env = "HEADROOM_PROXY_CCR_REDIS_KEY_PREFIX"
+    )]
+    pub ccr_redis_key_prefix: Option<String>,
+
     /// Whether to derive `frozen_message_count` from customer
     /// `cache_control` markers in the request body (PR-A4).
     ///
@@ -499,6 +553,7 @@ pub struct Config {
     /// Inherits `max_body_bytes` when not overridden. Bodies larger
     /// than this still forward, just unchanged.
     pub compression_max_body_bytes: u64,
+    pub ccr_backend: CcrBackendConfig,
     /// Policy mode for compression on `/v1/messages`. PR-A1 lockdown:
     /// both `Off` and `LiveZone` result in byte-faithful passthrough;
     /// `LiveZone` additionally emits a `tracing::warn!` per request
@@ -575,6 +630,23 @@ impl Config {
             compression: args.compression,
             compression_max_body_bytes,
             compression_mode: args.compression_mode,
+            ccr_backend: match args.ccr_backend {
+                CcrBackend::InMemory => CcrBackendConfig::InMemory {
+                    capacity: args.ccr_in_memory_capacity,
+                    ttl_seconds: args.ccr_ttl_seconds,
+                },
+                CcrBackend::Sqlite => CcrBackendConfig::Sqlite {
+                    path: args.ccr_sqlite_path,
+                    ttl_seconds: args.ccr_ttl_seconds,
+                },
+                CcrBackend::Redis => CcrBackendConfig::Redis {
+                    url: args
+                        .ccr_redis_url
+                        .unwrap_or_else(|| "redis://127.0.0.1:6379".to_string()),
+                    ttl_seconds: args.ccr_ttl_seconds,
+                    key_prefix: args.ccr_redis_key_prefix,
+                },
+            },
             cache_control_auto_frozen: args.cache_control_auto_frozen,
             auth_mode_policy_enforcement: args.auth_mode_policy_enforcement,
             strip_internal_headers: args.strip_internal_headers,
@@ -605,6 +677,10 @@ impl Config {
             compression: false,
             compression_max_body_bytes: 100 * 1024 * 1024,
             compression_mode: CompressionMode::Off,
+            ccr_backend: CcrBackendConfig::InMemory {
+                capacity: headroom_core::ccr::DEFAULT_CAPACITY,
+                ttl_seconds: headroom_core::ccr::DEFAULT_TTL.as_secs(),
+            },
             // Match production default so the cache-control walker is
             // exercised under test without per-test opt-in.
             cache_control_auto_frozen: CacheControlAutoFrozen::Enabled,

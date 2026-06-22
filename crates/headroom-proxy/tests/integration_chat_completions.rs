@@ -29,7 +29,7 @@
 mod common;
 
 use bytes::Bytes;
-use common::start_proxy_with;
+use common::{extract_ccr_hash, start_proxy_with, start_proxy_with_state};
 use headroom_proxy::sse::framing::SseFramer;
 use headroom_proxy::sse::openai_chat::ChunkState;
 use serde_json::{json, Value};
@@ -200,6 +200,56 @@ async fn tool_message_compressed() {
         body.len(),
         got.len()
     );
+    proxy.shutdown().await;
+}
+
+#[tokio::test]
+async fn tool_message_compressed_emits_store_backed_ccr_marker() {
+    let upstream = MockServer::start().await;
+    let captured = mount_capture(&upstream).await;
+    let captured_store = Arc::new(Mutex::new(None));
+    let store_slot = captured_store.clone();
+    let proxy = start_proxy_with_state(
+        &upstream.uri(),
+        |c| {
+            c.compression = true;
+            c.compression_mode = headroom_proxy::config::CompressionMode::LiveZone;
+        },
+        move |state| {
+            *store_slot.lock().unwrap() = Some(state.ccr_store.clone());
+            state
+        },
+    )
+    .await;
+
+    let tool_payload = compressible_tool_array_payload();
+    let payload = json!({
+        "model": "gpt-4o",
+        "messages": [
+            {"role": "user", "content": "summarize the rows below"},
+            {"role": "assistant", "content": "fetching"},
+            {"role": "tool", "tool_call_id": "t1", "content": tool_payload},
+        ]
+    });
+    let body = serde_json::to_vec(&payload).unwrap();
+
+    let resp = reqwest::Client::new()
+        .post(format!("{}/v1/chat/completions", proxy.url()))
+        .header("content-type", "application/json")
+        .body(body)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), 200);
+
+    let got = captured.lock().unwrap().clone().expect("upstream got body");
+    let hash = extract_ccr_hash(&got).expect("upstream body contains CCR marker");
+    let store = captured_store
+        .lock()
+        .unwrap()
+        .clone()
+        .expect("test captured CCR store");
+    assert_eq!(store.get(&hash).as_deref(), Some(tool_payload.as_str()));
     proxy.shutdown().await;
 }
 

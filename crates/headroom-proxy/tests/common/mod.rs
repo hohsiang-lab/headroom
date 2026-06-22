@@ -7,6 +7,7 @@ use std::time::Duration;
 
 use headroom_proxy::vertex::TokenSource;
 use headroom_proxy::{build_app, AppState, Config};
+use serde_json::{json, Value};
 use tokio::sync::oneshot;
 use url::Url;
 
@@ -104,6 +105,30 @@ pub fn install_static_token_source(mut state: AppState, bearer: &str) -> AppStat
         bearer.to_string(),
     )) as Arc<dyn TokenSource>;
     state
+}
+
+#[allow(dead_code)]
+pub fn extract_ccr_hash(body: &[u8]) -> Option<String> {
+    let text = std::str::from_utf8(body).ok()?;
+    let start = text.find("<<ccr:")? + "<<ccr:".len();
+    let rest = &text[start..];
+    let end = rest.find(">>")?;
+    Some(rest[..end].to_string())
+}
+
+#[allow(dead_code)]
+pub fn compressible_openai_rows_payload() -> String {
+    let rows: Vec<Value> = (0..1500)
+        .map(|i| {
+            json!({
+                "id": i,
+                "kind": "row",
+                "value": format!("repeat-{}", i % 5),
+                "status": "ok",
+            })
+        })
+        .collect();
+    serde_json::to_string(&rows).unwrap()
 }
 
 /// Hold a reference to the config so dead_code doesn't strip its use.

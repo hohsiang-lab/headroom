@@ -2,6 +2,7 @@
 
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
+use headroom_core::ccr::backends::CcrBackendInitError;
 use thiserror::Error;
 
 #[derive(Debug, Error)]
@@ -37,6 +38,8 @@ pub enum ProxyError {
     /// LLM request.
     #[error("compression engine startup failed: {0}")]
     CompressionStartup(String),
+    #[error("ccr backend startup failed: {0}")]
+    CcrStartup(#[from] CcrBackendInitError),
 }
 
 impl IntoResponse for ProxyError {
@@ -62,6 +65,7 @@ impl IntoResponse for ProxyError {
             ProxyError::CompressionStartup(_) => {
                 (StatusCode::INTERNAL_SERVER_ERROR, self.to_string())
             }
+            ProxyError::CcrStartup(_) => (StatusCode::INTERNAL_SERVER_ERROR, self.to_string()),
         };
         tracing::warn!(error = %msg, "proxy error");
         (status, msg).into_response()
