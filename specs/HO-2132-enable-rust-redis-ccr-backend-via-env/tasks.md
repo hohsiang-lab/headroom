@@ -41,8 +41,22 @@
 ## Stop Conditions
 
 - [x] S001 Stop if live Linear state is Todo and any implementation code would be required.
-- [ ] S002 Stop if Redis-selected runtime would compile without the `redis` feature.
-- [ ] S003 Stop if Redis init failure can fall back to memory or SQLite.
-- [ ] S004 Stop if `/v1/retrieve/stats` cannot truthfully report the selected backend.
-- [ ] S005 Stop if real Redis smoke is unavailable; do not claim Redis-backed CCR roundtrip.
-- [ ] S006 Stop if dev-infra production switch prerequisites are missing.
+- [x] S002 Stop if Redis-selected runtime would compile without the `redis` feature.
+- [x] S003 Stop if Redis init failure can fall back to memory or SQLite.
+- [x] S004 Stop if `/v1/retrieve/stats` cannot truthfully report the selected backend.
+- [x] S005 Stop if real Redis smoke is unavailable; do not claim Redis-backed CCR roundtrip.
+- [x] S006 Stop if dev-infra production switch prerequisites are missing.
+
+## Implementation Evidence
+
+- `cargo fmt --check` passed.
+- `cargo check -p headroom-proxy` passed.
+- `cargo clippy -p headroom-proxy --all-targets -- -D warnings` passed.
+- `cargo test -p headroom-proxy ccr_env -- --nocapture` passed 2 tests.
+- `cargo test -p headroom-proxy --test integration_health -- --nocapture` passed 5 tests.
+- `cargo test -p headroom-proxy --test integration_retrieve -- --nocapture` passed 5 tests.
+- With Redis service `HEADROOM_TEST_REDIS_URL=redis://127.0.0.1:41935`, `cargo test -p headroom-core --features redis --test ccr_backends -- --nocapture` passed 8 tests.
+- With the same Redis service, `cargo test -p headroom-proxy --test integration_retrieve redis_backend_roundtrip_and_stats_when_test_redis_configured -- --nocapture` passed 1 test.
+- `CONTAINER_CLI=podman IMAGE=ho2132-headroom-redis-ccr-smoke:local scripts/smoke_redis_ccr_image.sh` passed and read `/v1/retrieve/stats` with `"backend":"redis"`.
+- `git diff --check hohsiang/main...HEAD` passed.
+- Root `package.json` is absent, so repo-standard Node lint gate is not applicable to this Rust/Docker/docs change.
