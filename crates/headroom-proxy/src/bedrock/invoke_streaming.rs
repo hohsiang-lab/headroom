@@ -1012,6 +1012,7 @@ mod tests {
             client: reqwest::Client::new(),
             bedrock_credentials: None,
             ccr_store: std::sync::Arc::new(headroom_core::ccr::InMemoryCcrStore::new()),
+            retrieve_stats: std::sync::Arc::new(crate::handlers::retrieve::RetrieveStats::new()),
             // PR-E6: drift detector is unused by this URL-builder
             // unit test; small capacity to satisfy the struct shape.
             drift_state: crate::cache_stabilization::drift_detector::DriftState::new(8),
@@ -1057,6 +1058,7 @@ mod tests {
             client: reqwest::Client::new(),
             bedrock_credentials: None,
             ccr_store: std::sync::Arc::new(headroom_core::ccr::InMemoryCcrStore::new()),
+            retrieve_stats: std::sync::Arc::new(crate::handlers::retrieve::RetrieveStats::new()),
             drift_state: crate::cache_stabilization::drift_detector::DriftState::new(8),
             vertex_token_source: std::sync::Arc::new(crate::vertex::StaticTokenSource::new(
                 "test".to_string(),

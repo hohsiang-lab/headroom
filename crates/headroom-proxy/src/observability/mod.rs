@@ -43,6 +43,7 @@ pub mod compression_ratio;
 pub mod metric_names;
 pub mod prometheus;
 pub mod proxy_metrics;
+pub mod retrieve;
 
 pub use prometheus::{
     handle_metrics, observe_bedrock_invoke_latency, record_bedrock_eventstream_message,
@@ -66,3 +67,4 @@ pub use proxy_metrics::{
     extract_rate_limit_snapshot, record_passthrough_bytes_modified, record_rate_limit_snapshot,
     record_response_status, record_service_tier, RateLimitSnapshot,
 };
+pub use retrieve::record_ccr_retrieve_request;

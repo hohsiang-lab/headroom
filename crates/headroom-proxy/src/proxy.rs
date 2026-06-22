@@ -62,6 +62,7 @@ pub struct AppState {
     /// requests.
     pub bedrock_credentials: Option<Arc<aws_credential_types::Credentials>>,
     pub ccr_store: Arc<dyn CcrStore>,
+    pub retrieve_stats: Arc<crate::handlers::retrieve::RetrieveStats>,
     /// PR-E6: per-session structural-hash LRU for the cache-bust
     /// drift detector. Bounded to 1000 sessions in production. The
     /// detector is read-only — observing it never mutates the
@@ -111,6 +112,7 @@ impl AppState {
             client,
             bedrock_credentials: None,
             ccr_store,
+            retrieve_stats: Arc::new(crate::handlers::retrieve::RetrieveStats::new()),
             drift_state: DriftState::new(DRIFT_DETECTOR_CAPACITY),
             vertex_token_source,
         })
@@ -173,6 +175,14 @@ pub fn build_app(state: AppState) -> Router {
         .route(
             "/v1/responses",
             post(crate::handlers::responses::handle_responses),
+        )
+        .route(
+            "/v1/retrieve",
+            post(crate::handlers::retrieve::handle_retrieve),
+        )
+        .route(
+            "/v1/retrieve/stats",
+            get(crate::handlers::retrieve::handle_retrieve_stats),
         )
         // PR-D4: native Vertex publisher path. The Vertex AI Anthropic
         // publisher endpoints look like
