@@ -614,6 +614,7 @@ mod tests {
             config: std::sync::Arc::new(config),
             client: reqwest::Client::new(),
             bedrock_credentials: None,
+            ccr_store: std::sync::Arc::new(headroom_core::ccr::InMemoryCcrStore::new()),
             drift_state: crate::cache_stabilization::drift_detector::DriftState::new(8),
             vertex_token_source: std::sync::Arc::new(crate::vertex::StaticTokenSource::new(
                 "test".to_string(),
@@ -645,6 +646,7 @@ mod tests {
             config: std::sync::Arc::new(config),
             client: reqwest::Client::new(),
             bedrock_credentials: None,
+            ccr_store: std::sync::Arc::new(headroom_core::ccr::InMemoryCcrStore::new()),
             // PR-E6: small capacity is fine — the Bedrock URL builder
             // unit test never observes drift, but `AppState` requires
             // the field to be populated.
@@ -681,6 +683,7 @@ mod tests {
             config: std::sync::Arc::new(config),
             client: reqwest::Client::new(),
             bedrock_credentials: None,
+            ccr_store: std::sync::Arc::new(headroom_core::ccr::InMemoryCcrStore::new()),
             // PR-E6: see above — drift detector is unused by this
             // test; we just satisfy the struct shape.
             drift_state: crate::cache_stabilization::drift_detector::DriftState::new(8),

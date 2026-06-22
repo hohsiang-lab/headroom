@@ -1877,6 +1877,15 @@ pub fn compress_openai_chat_live_zone(
     _auth_mode: AuthMode,
     model: &str,
 ) -> Result<LiveZoneOutcome, LiveZoneError> {
+    compress_openai_chat_live_zone_with_ccr(body_raw, _auth_mode, model, None)
+}
+
+pub fn compress_openai_chat_live_zone_with_ccr(
+    body_raw: &[u8],
+    _auth_mode: AuthMode,
+    model: &str,
+    ccr_store: Option<&dyn CcrStore>,
+) -> Result<LiveZoneOutcome, LiveZoneError> {
     let parsed: Value = serde_json::from_slice(body_raw).map_err(LiveZoneError::BodyNotJson)?;
     let messages = parsed
         .get("messages")
@@ -1953,7 +1962,7 @@ pub fn compress_openai_chat_live_zone(
             slot.block_type,
             tokenizer.as_ref(),
             &mut replacements,
-            None, // PR-C2: no CCR store yet on the OpenAI path.
+            ccr_store,
         );
         block_outcomes.push(outcome);
     }
@@ -2334,6 +2343,15 @@ pub fn compress_openai_responses_live_zone(
     _auth_mode: AuthMode,
     model: &str,
 ) -> Result<LiveZoneOutcome, LiveZoneError> {
+    compress_openai_responses_live_zone_with_ccr(body_raw, _auth_mode, model, None)
+}
+
+pub fn compress_openai_responses_live_zone_with_ccr(
+    body_raw: &[u8],
+    _auth_mode: AuthMode,
+    model: &str,
+    ccr_store: Option<&dyn CcrStore>,
+) -> Result<LiveZoneOutcome, LiveZoneError> {
     let parsed: Value = serde_json::from_slice(body_raw).map_err(LiveZoneError::BodyNotJson)?;
 
     // Responses uses `input`. We accept both `input` and `messages`
@@ -2463,7 +2481,7 @@ pub fn compress_openai_responses_live_zone(
             slot.block_type,
             tokenizer.as_ref(),
             &mut replacements,
-            None, // PR-C3: no CCR store on the Responses path yet.
+            ccr_store,
         );
         block_outcomes.push(outcome);
     }

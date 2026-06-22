@@ -31,6 +31,7 @@ use crate::websocket::ws_handler;
 // path for downstream handlers that read the value back out of
 // `req.extensions()` (Phase F PR-F2/F3/F4).
 use headroom_core::auth_mode::{classify as classify_auth_mode, AuthMode};
+use headroom_core::ccr::{from_config as ccr_from_config, CcrStore};
 use headroom_core::compression_policy::CompressionPolicy;
 
 /// Shared state passed to every handler.
@@ -60,6 +61,7 @@ pub struct AppState {
     /// log so failures are LOUD — no silent fallback to unsigned
     /// requests.
     pub bedrock_credentials: Option<Arc<aws_credential_types::Credentials>>,
+    pub ccr_store: Arc<dyn CcrStore>,
     /// PR-E6: per-session structural-hash LRU for the cache-bust
     /// drift detector. Bounded to 1000 sessions in production. The
     /// detector is read-only — observing it never mutates the
@@ -100,11 +102,15 @@ impl AppState {
         // cheap when no Vertex route is exercised.
         let vertex_token_source: Arc<dyn crate::vertex::TokenSource> =
             Arc::new(crate::vertex::adc::GcpAdcTokenSource::new());
+        let ccr_store: Arc<dyn CcrStore> = ccr_from_config(&config.ccr_backend)
+            .map(Arc::from)
+            .map_err(ProxyError::CcrStartup)?;
 
         Ok(Self {
             config: Arc::new(config),
             client,
             bedrock_credentials: None,
+            ccr_store,
             drift_state: DriftState::new(DRIFT_DETECTOR_CAPACITY),
             vertex_token_source,
         })
@@ -719,6 +725,7 @@ pub(crate) async fn forward_http(
                         state.config.compression_mode,
                         auth_mode,
                         &request_id,
+                        Some(state.ccr_store.as_ref()),
                     )
                 }
             }
@@ -733,6 +740,7 @@ pub(crate) async fn forward_http(
                     state.config.compression_mode,
                     auth_mode,
                     &request_id,
+                    Some(state.ccr_store.as_ref()),
                 )
             }
         };

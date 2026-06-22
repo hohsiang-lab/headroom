@@ -22,7 +22,7 @@
 
 mod common;
 
-use common::start_proxy_with;
+use common::{extract_ccr_hash, start_proxy_with, start_proxy_with_state};
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
 use std::sync::{Arc, Mutex};
@@ -72,6 +72,71 @@ fn assert_byte_equal_sha256(inbound: &[u8], received: &[u8]) {
         inbound_hash, received_hash,
         "SHA-256 mismatch: inbound={inbound_hash}, upstream-received={received_hash}",
     );
+}
+
+fn compressible_shell_log() -> String {
+    let mut log = String::new();
+    for i in 0..240 {
+        log.push_str(&format!(
+            "[2024-01-01 00:00:00] INFO build.rs:42 compiled module foo_{i}\n"
+        ));
+    }
+    assert!(
+        log.len() > 4096,
+        "log fixture must exceed compression floor"
+    );
+    log
+}
+
+#[tokio::test]
+async fn output_item_compressed_emits_store_backed_ccr_marker() {
+    let upstream = MockServer::start().await;
+    let captured = mount_capture(&upstream).await;
+    let captured_store = Arc::new(Mutex::new(None));
+    let store_slot = captured_store.clone();
+    let proxy = start_proxy_with_state(
+        &upstream.uri(),
+        |c| {
+            c.compression = true;
+            c.compression_mode = headroom_proxy::config::CompressionMode::LiveZone;
+        },
+        move |state| {
+            *store_slot.lock().unwrap() = Some(state.ccr_store.clone());
+            state
+        },
+    )
+    .await;
+
+    let output = compressible_shell_log();
+    let payload = json!({
+        "model": "gpt-4o",
+        "input": [{
+            "type": "local_shell_call_output",
+            "id": "lso_1",
+            "call_id": "call_1",
+            "output": output
+        }]
+    });
+    let body = serde_json::to_vec(&payload).unwrap();
+
+    let resp = reqwest::Client::new()
+        .post(format!("{}/v1/responses", proxy.url()))
+        .header("content-type", "application/json")
+        .body(body)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), 200);
+
+    let got = captured.lock().unwrap().clone().expect("upstream got body");
+    let hash = extract_ccr_hash(&got).expect("upstream body contains CCR marker");
+    let store = captured_store
+        .lock()
+        .unwrap()
+        .clone()
+        .expect("test captured CCR store");
+    assert_eq!(store.get(&hash).as_deref(), Some(output.as_str()));
+    proxy.shutdown().await;
 }
 
 /// V4A diff fixture used for apply_patch_* tests. The exact byte
