@@ -13,8 +13,8 @@
 - [x] T009 Create `scope-confirmation.md` with assignee-visible scope verdict.
 - [x] T010 Run docs-only validation.
 - [x] T011 Confirm diff limited to `specs/HO-2132-enable-rust-redis-ccr-backend-via-env/**`.
-- [ ] T012 Commit docs-only SpecKit artifacts.
-- [ ] T013 Push branch and open/update draft PR.
+- [x] T012 Commit docs-only SpecKit artifacts.
+- [x] T013 Push branch and open/update draft PR.
 - [ ] T014 Post Todo scope report to Discord issue thread.
 - [ ] T015 Run Todo -> Waiting guard only after PR/thread evidence exists.
 
