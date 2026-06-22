@@ -17,6 +17,10 @@ fn in_memory_ccr(config: &mut headroom_proxy::Config) {
     };
 }
 
+fn redis_url() -> Option<String> {
+    std::env::var("HEADROOM_TEST_REDIS_URL").ok()
+}
+
 #[tokio::test]
 async fn retrieve_success_returns_seeded_payload_without_upstream() {
     let payload = r#"{"rows":[{"id":1},{"id":2}]}"#.to_string();
@@ -165,6 +169,58 @@ async fn retrieve_stats_empty_store_and_metrics_are_bounded() {
     assert!(metrics.contains("outcome=\"invalid_request\""));
     assert!(metrics.contains("outcome=\"stats_read\""));
     assert!(!metrics.contains("0123456789abcdefabcdef01"));
+
+    proxy.shutdown().await;
+}
+
+#[tokio::test]
+async fn redis_backend_roundtrip_and_stats_when_test_redis_configured() {
+    let Some(url) = redis_url() else {
+        eprintln!(
+            "skipping redis_backend_roundtrip_and_stats_when_test_redis_configured: \
+             HEADROOM_TEST_REDIS_URL not set"
+        );
+        return;
+    };
+
+    let payload = r#"{"redis":"payload","source":"integration"}"#.to_string();
+    let hash = compute_key(payload.as_bytes());
+    let seed_hash = hash.clone();
+    let seed_payload = payload.clone();
+    let proxy = start_proxy_with_state(
+        DEAD_UPSTREAM,
+        move |config| {
+            config.ccr_backend = CcrBackendConfig::Redis {
+                url: url.clone(),
+                ttl_seconds: 300,
+                key_prefix: Some("headroom_proxy_test".to_string()),
+            };
+        },
+        move |state| {
+            state.ccr_store.put(&seed_hash, &seed_payload);
+            state
+        },
+    )
+    .await;
+
+    let stats: Value = reqwest::get(format!("{}/v1/retrieve/stats", proxy.url()))
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(stats["store"]["backend"], json!("redis"));
+    assert_eq!(stats["store"]["ttl_seconds"], json!(300));
+
+    let resp = reqwest::Client::new()
+        .post(format!("{}/v1/retrieve", proxy.url()))
+        .json(&json!({ "hash": hash }))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), StatusCode::OK);
+    let body: Value = resp.json().await.unwrap();
+    assert_eq!(body["original_content"], json!(payload));
 
     proxy.shutdown().await;
 }

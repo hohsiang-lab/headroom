@@ -15,28 +15,28 @@
 - [x] T011 Confirm diff limited to `specs/HO-2132-enable-rust-redis-ccr-backend-via-env/**`.
 - [x] T012 Commit docs-only SpecKit artifacts.
 - [x] T013 Push branch and open/update draft PR.
-- [ ] T014 Post Todo scope report to Discord issue thread.
-- [ ] T015 Run Todo -> Waiting guard only after PR/thread evidence exists.
+- [x] T014 Post Todo scope report to Discord issue thread.
+- [x] T015 Run Todo -> Waiting guard only after PR/thread evidence exists.
 
 ## Later Implementation Tasks
 
-- [ ] T100 Re-read live Linear state; do not touch implementation files unless state is implementation-eligible.
-- [ ] T101 Add Rust proxy CCR config parsing for `HEADROOM_CCR_BACKEND`, `HEADROOM_REDIS_URL`, and `HEADROOM_CCR_TENANT_PREFIX`.
-- [ ] T102 Convert proxy config into `headroom_core::ccr::backends::CcrBackendConfig`.
-- [ ] T103 Initialize selected CCR backend at startup and propagate init errors so startup fails loud.
-- [ ] T104 Ensure Redis selection cannot silently fall back to memory or SQLite.
-- [ ] T105 Enable `headroom-core/redis` for the Rust proxy production build path where Redis runtime support is required.
-- [ ] T106 Add `/v1/retrieve/stats` route or equivalent Rust proxy handler that reports selected CCR backend.
-- [ ] T107 Ensure stats response redacts Redis URL and only exposes safe metadata.
-- [ ] T108 Add focused Rust tests for Redis backend env parsing and prefix behavior.
-- [ ] T109 Add focused Rust tests for backend selection and loud error cases.
-- [ ] T110 Add stats endpoint test proving backend `redis` is reported when enabled.
-- [ ] T111 Add real Redis integration/smoke roundtrip using `HEADROOM_TEST_REDIS_URL` or service-backed test harness.
-- [ ] T112 Update image smoke to prove Redis-capable runtime against a Redis service.
-- [ ] T113 Document dev-infra Redis persistence/resource/auth prerequisites before production switch.
-- [ ] T114 Run Rust fmt/check/tests selected by repo policy.
-- [ ] T115 Run Redis real-service smoke and record evidence.
-- [ ] T116 Run image smoke and record `/v1/retrieve/stats` Redis readback.
+- [x] T100 Re-read live Linear state; do not touch implementation files unless state is implementation-eligible.
+- [x] T101 Add Rust proxy CCR config parsing for `HEADROOM_CCR_BACKEND`, `HEADROOM_REDIS_URL`, and `HEADROOM_CCR_TENANT_PREFIX`.
+- [x] T102 Convert proxy config into `headroom_core::ccr::backends::CcrBackendConfig`.
+- [x] T103 Initialize selected CCR backend at startup and propagate init errors so startup fails loud.
+- [x] T104 Ensure Redis selection cannot silently fall back to memory or SQLite.
+- [x] T105 Enable `headroom-core/redis` for the Rust proxy production build path where Redis runtime support is required.
+- [x] T106 Add `/v1/retrieve/stats` route or equivalent Rust proxy handler that reports selected CCR backend.
+- [x] T107 Ensure stats response redacts Redis URL and only exposes safe metadata.
+- [x] T108 Add focused Rust tests for Redis backend env parsing and prefix behavior.
+- [x] T109 Add focused Rust tests for backend selection and loud error cases.
+- [x] T110 Add stats endpoint test proving backend `redis` is reported when enabled.
+- [x] T111 Add real Redis integration/smoke roundtrip using `HEADROOM_TEST_REDIS_URL` or service-backed test harness.
+- [x] T112 Update image smoke to prove Redis-capable runtime against a Redis service.
+- [x] T113 Document dev-infra Redis persistence/resource/auth prerequisites before production switch.
+- [x] T114 Run Rust fmt/check/tests selected by repo policy.
+- [x] T115 Run Redis real-service smoke and record evidence.
+- [x] T116 Run image smoke and record `/v1/retrieve/stats` Redis readback.
 
 ## Stop Conditions
 

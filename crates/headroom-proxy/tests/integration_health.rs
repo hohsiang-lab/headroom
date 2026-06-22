@@ -61,3 +61,22 @@ fn app_state_fails_loudly_when_ccr_sqlite_init_fails() {
         "expected CCR startup error, got {err:?}"
     );
 }
+
+#[test]
+fn app_state_fails_loudly_when_redis_url_missing() {
+    let mut config = Config::for_test("http://127.0.0.1:1".parse().unwrap());
+    config.ccr_backend = CcrBackendConfig::Redis {
+        url: String::new(),
+        ttl_seconds: headroom_core::ccr::DEFAULT_TTL.as_secs(),
+        key_prefix: Some("headroom_test".to_string()),
+    };
+
+    let err = match AppState::new(config) {
+        Ok(_) => panic!("missing Redis URL must fail startup"),
+        Err(err) => err,
+    };
+    assert!(
+        matches!(err, ProxyError::CcrStartup(_)),
+        "expected CCR startup error, got {err:?}"
+    );
+}
